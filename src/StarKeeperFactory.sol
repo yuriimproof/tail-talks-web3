@@ -8,7 +8,8 @@ import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 /**
  * @title StarKeeperFactory
  * @dev Factory contract for creating and managing StarKeeper collections
- * Implements 75% quorum governance for all admin operations
+ * @notice Implements 75% quorum governance for all admin operations and collection management
+ * @author Yuri Improof (@yuriimproof) for TailTalks Team
  */
 contract StarKeeperFactory is AccessControl {
     // ============ Constants ============
@@ -86,7 +87,7 @@ contract StarKeeperFactory is AccessControl {
     event BaseURIUpdated(address indexed collection, string newURI);
     event MintPriceUpdated(address indexed collection, uint256 newPrice);
     event TokenMintPriceUpdated(address indexed collection, uint256 newPrice);
-    event PaymentTokenUpdated(address indexed collection, address newToken);
+    event PaymentTokenUpdated(address indexed collection, address indexed newToken);
     event CollectionImageURIUpdated(address indexed collection, string newURI);
     event MaxSupplyUpdated(address indexed collection, uint256 newMaxSupply);
     event TokenMinted(address indexed collection, address indexed to, uint256 tokenId);
@@ -106,6 +107,8 @@ contract StarKeeperFactory is AccessControl {
     error ProposalExpired();
     error AlreadyVoted();
     error CollectionOperationFailed();
+    error SupplyTooLow();
+    error InvalidString();
 
     // ============ Modifiers ============
 
@@ -121,6 +124,16 @@ contract StarKeeperFactory is AccessControl {
 
     modifier proposalExists(uint256 _proposalId) {
         if (proposals[_proposalId].id == 0) revert ProposalNotFound();
+        _;
+    }
+
+    modifier validString(string calldata _str) {
+        if (bytes(_str).length == 0) revert InvalidString();
+        _;
+    }
+
+    modifier validSupply(uint256 _supply) {
+        if (_supply < 1) revert SupplyTooLow();
         _;
     }
 
@@ -157,9 +170,7 @@ contract StarKeeperFactory is AccessControl {
         address _paymentToken,
         string calldata _baseTokenURI,
         string calldata _collectionImageURI
-    ) external onlyRole(ADMIN_ROLE) returns (uint256) {
-        if (_maxSupply == 0) revert InvalidMaxSupply();
-
+    ) external onlyRole(ADMIN_ROLE) validString(_name) validString(_symbol) validSupply(_maxSupply) returns (uint256) {
         bytes memory functionData = abi.encode(
             _name, _symbol, _maxSupply, _mintPrice, _tokenMintPrice, _paymentToken, _baseTokenURI, _collectionImageURI
         );
@@ -203,6 +214,7 @@ contract StarKeeperFactory is AccessControl {
         external
         onlyRole(ADMIN_ROLE)
         validCollection(_collection)
+        validString(_newBaseURI)
         returns (uint256)
     {
         return _createProposal(FunctionType.SetBaseURI, abi.encode(_collection, _newBaseURI));
@@ -251,6 +263,7 @@ contract StarKeeperFactory is AccessControl {
         external
         onlyRole(ADMIN_ROLE)
         validCollection(_collection)
+        validString(_newImageURI)
         returns (uint256)
     {
         return _createProposal(FunctionType.SetCollectionImageURI, abi.encode(_collection, _newImageURI));
@@ -263,6 +276,7 @@ contract StarKeeperFactory is AccessControl {
         external
         onlyRole(ADMIN_ROLE)
         validCollection(_collection)
+        validSupply(_newMaxSupply)
         returns (uint256)
     {
         return _createProposal(FunctionType.SetMaxSupply, abi.encode(_collection, _newMaxSupply));
@@ -555,7 +569,7 @@ contract StarKeeperFactory is AccessControl {
     }
 
     function _executeSetBaseURI(bytes memory _functionData) internal {
-        (address collectionAddress, string memory newBaseURI) = abi.decode(_functionData, (address, string));
+        (address payable collectionAddress, string memory newBaseURI) = abi.decode(_functionData, (address, string));
 
         try StarKeeper(collectionAddress).setBaseURI(newBaseURI) {
             emit BaseURIUpdated(collectionAddress, newBaseURI);
@@ -565,57 +579,57 @@ contract StarKeeperFactory is AccessControl {
     }
 
     function _executeSetMintPrice(bytes memory _functionData) internal {
-        (address collectionAddress, uint256 newPrice) = abi.decode(_functionData, (address, uint256));
+        (address payable collectionAddress, uint256 newPrice) = abi.decode(_functionData, (address, uint256));
 
         try StarKeeper(collectionAddress).setMintPrice(newPrice) {
-            emit MintPriceUpdated(collectionAddress, newPrice);
+            emit MintPriceUpdated(collectionAddress, newPrice); // Simplified event
         } catch {
             revert CollectionOperationFailed();
         }
     }
 
     function _executeSetTokenMintPrice(bytes memory _functionData) internal {
-        (address collectionAddress, uint256 newPrice) = abi.decode(_functionData, (address, uint256));
+        (address payable collectionAddress, uint256 newPrice) = abi.decode(_functionData, (address, uint256));
 
         try StarKeeper(collectionAddress).setTokenMintPrice(newPrice) {
-            emit TokenMintPriceUpdated(collectionAddress, newPrice);
+            emit TokenMintPriceUpdated(collectionAddress, newPrice); // Simplified event
         } catch {
             revert CollectionOperationFailed();
         }
     }
 
     function _executeSetPaymentToken(bytes memory _functionData) internal {
-        (address collectionAddress, address newToken) = abi.decode(_functionData, (address, address));
+        (address payable collectionAddress, address newToken) = abi.decode(_functionData, (address, address));
 
         try StarKeeper(collectionAddress).setPaymentToken(newToken) {
-            emit PaymentTokenUpdated(collectionAddress, newToken);
+            emit PaymentTokenUpdated(collectionAddress, newToken); // Simplified event
         } catch {
             revert CollectionOperationFailed();
         }
     }
 
     function _executeSetImageURI(bytes memory _functionData) internal {
-        (address collectionAddress, string memory newImageURI) = abi.decode(_functionData, (address, string));
+        (address payable collectionAddress, string memory newImageURI) = abi.decode(_functionData, (address, string));
 
         try StarKeeper(collectionAddress).setCollectionImageURI(newImageURI) {
-            emit CollectionImageURIUpdated(collectionAddress, newImageURI);
+            emit CollectionImageURIUpdated(collectionAddress, newImageURI); // Simplified event
         } catch {
             revert CollectionOperationFailed();
         }
     }
 
     function _executeSetMaxSupply(bytes memory _functionData) internal {
-        (address collectionAddress, uint256 newMaxSupply) = abi.decode(_functionData, (address, uint256));
+        (address payable collectionAddress, uint256 newMaxSupply) = abi.decode(_functionData, (address, uint256));
 
         try StarKeeper(collectionAddress).setMaxSupply(newMaxSupply) {
-            emit MaxSupplyUpdated(collectionAddress, newMaxSupply);
+            emit MaxSupplyUpdated(collectionAddress, newMaxSupply); // Simplified event
         } catch {
             revert CollectionOperationFailed();
         }
     }
 
     function _executeMintTo(bytes memory _functionData) internal {
-        (address collectionAddress, address recipient) = abi.decode(_functionData, (address, address));
+        (address payable collectionAddress, address recipient) = abi.decode(_functionData, (address, address));
 
         try StarKeeper(collectionAddress).mintTo(recipient) returns (uint256 tokenId) {
             emit TokenMinted(collectionAddress, recipient, tokenId);
@@ -625,7 +639,7 @@ contract StarKeeperFactory is AccessControl {
     }
 
     function _executeWithdrawFunds(bytes memory _functionData) internal {
-        (address collectionAddress, address recipient, uint256 amount) =
+        (address payable collectionAddress, address recipient, uint256 amount) =
             abi.decode(_functionData, (address, address, uint256));
 
         try StarKeeper(collectionAddress).withdrawFunds(payable(recipient), amount) {
@@ -636,12 +650,21 @@ contract StarKeeperFactory is AccessControl {
     }
 
     function _executeWithdrawTokens(bytes memory _functionData) internal {
-        (address collectionAddress, address recipient) = abi.decode(_functionData, (address, address));
+        (address payable collectionAddress, address recipient) = abi.decode(_functionData, (address, address));
 
         try StarKeeper(collectionAddress).withdrawTokens(recipient) {
             emit TokensWithdrawn(collectionAddress, recipient);
         } catch {
             revert CollectionOperationFailed();
         }
+    }
+
+    // ============ Receive Function ============
+
+    /**
+     * @dev Allow contract to receive ETH
+     */
+    receive() external payable {
+        // Allow contract to receive ETH
     }
 }

@@ -2,16 +2,21 @@
 pragma solidity ^0.8.28;
 
 import {ERC721} from "@openzeppelin/contracts/token/ERC721/ERC721.sol";
-import {ERC721Enumerable} from "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
 import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
 /**
  * @title StarOwner
  * @dev NFT contract for pet images with multi-admin governance
+ * @notice This contract allows minting of pet NFTs with custom IPFS URIs and implements
+ *         a 75% quorum governance system for administrative operations
+ * @author Yuri Improof (@yuriimproof) for TailTalks Team
  */
-contract StarOwner is ERC721Enumerable, AccessControl {
+contract StarOwner is ERC721, AccessControl {
+    using SafeERC20 for IERC20;
+
     // ============ Constants ============
 
     bytes32 private constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
@@ -74,18 +79,18 @@ contract StarOwner is ERC721Enumerable, AccessControl {
 
     event FundsWithdrawn(address indexed to, uint256 amount);
     event TokensWithdrawn(address indexed to, uint256 amount);
-    event MintPriceUpdated(uint256 newPrice);
-    event TokenMintPriceUpdated(uint256 newPrice);
-    event PaymentTokenUpdated(address newToken);
+    event MintPriceUpdated(uint256 oldPrice, uint256 newPrice);
+    event TokenMintPriceUpdated(uint256 oldPrice, uint256 newPrice);
+    event PaymentTokenUpdated(address indexed oldToken, address indexed newToken);
     event TokenMinted(address indexed to, uint256 indexed tokenId, string paymentMethod);
 
-    event TokenURIUpdated(uint256 tokenId, string newURI);
+    event TokenURIUpdated(uint256 indexed tokenId, string newURI);
 
     // ============ Custom Errors ============
 
     error InvalidAddress();
     error InvalidParameters();
-    error InsufficientPayment();
+    error InsufficientBalance();
     error WithdrawalFailed();
     error TokenTransferFailed();
     error ERC20PaymentNotEnabled();
@@ -97,7 +102,6 @@ contract StarOwner is ERC721Enumerable, AccessControl {
     error AdminAlreadyExists();
     error AdminDoesNotExist();
     error LastAdminCannotBeRemoved();
-
     // ============ Modifiers ============
 
     modifier validAddress(address _address) {
@@ -107,6 +111,11 @@ contract StarOwner is ERC721Enumerable, AccessControl {
 
     modifier proposalExists(uint256 _proposalId) {
         if (proposals[_proposalId].id == 0) revert ProposalNotFound();
+        _;
+    }
+
+    modifier validAmount(uint256 _amount) {
+        if (_amount <= 0) revert InvalidParameters();
         _;
     }
 
@@ -149,7 +158,7 @@ contract StarOwner is ERC721Enumerable, AccessControl {
      */
     function mint(string calldata ipfsURI) external payable returns (uint256) {
         if (bytes(ipfsURI).length == 0) revert InvalidParameters();
-        if (msg.value < mintPrice) revert InsufficientPayment();
+        if (msg.value < mintPrice) revert InsufficientBalance();
 
         uint256 tokenId = tokenIdCounter;
         unchecked {
@@ -174,9 +183,7 @@ contract StarOwner is ERC721Enumerable, AccessControl {
         if (paymentToken == address(0) || tokenMintPrice == 0) revert ERC20PaymentNotEnabled();
 
         IERC20 token = IERC20(paymentToken);
-        if (!token.transferFrom(msg.sender, address(this), tokenMintPrice)) {
-            revert TokenTransferFailed();
-        }
+        token.safeTransferFrom(msg.sender, address(this), tokenMintPrice);
 
         uint256 tokenId = tokenIdCounter;
         unchecked {
@@ -272,6 +279,7 @@ contract StarOwner is ERC721Enumerable, AccessControl {
      */
     function updateTokenURI(uint256 tokenId, string calldata newURI) external onlyRole(ADMIN_ROLE) {
         if (tokenId == 0 || tokenId >= tokenIdCounter) revert InvalidParameters();
+        if (bytes(newURI).length == 0) revert InvalidParameters();
         tokenURIs[tokenId] = newURI;
         emit TokenURIUpdated(tokenId, newURI);
     }
@@ -384,6 +392,13 @@ contract StarOwner is ERC721Enumerable, AccessControl {
         return proposalCounter;
     }
 
+    /**
+     * @dev Get total supply of minted tokens
+     */
+    function totalSupply() public view returns (uint256) {
+        return tokenIdCounter - 1;
+    }
+
     // ============ Override Functions ============
 
     /**
@@ -398,12 +413,7 @@ contract StarOwner is ERC721Enumerable, AccessControl {
         return individualURI;
     }
 
-    function supportsInterface(bytes4 interfaceId)
-        public
-        view
-        override(ERC721Enumerable, AccessControl)
-        returns (bool)
-    {
+    function supportsInterface(bytes4 interfaceId) public view override(ERC721, AccessControl) returns (bool) {
         return super.supportsInterface(interfaceId);
     }
 
@@ -455,7 +465,7 @@ contract StarOwner is ERC721Enumerable, AccessControl {
         } else if (_proposalType == ProposalType.WithdrawFunds) {
             _executeWithdrawFunds(_targetAddress, _value);
         } else if (_proposalType == ProposalType.WithdrawTokens) {
-            _executeWithdrawTokens(_targetAddress);
+            _executeWithdrawTokens(_targetAddress, _value);
         } else if (_proposalType == ProposalType.SetMintPrice) {
             _executeSetMintPrice(_value);
         } else if (_proposalType == ProposalType.SetTokenFee) {
@@ -507,42 +517,51 @@ contract StarOwner is ERC721Enumerable, AccessControl {
         emit AdminRemoved(_admin);
     }
 
-    function _executeWithdrawFunds(address _to, uint256 _amount) internal {
+    function _executeWithdrawFunds(address _to, uint256 _amount) internal validAddress(_to) validAmount(_amount) {
         uint256 balance = address(this).balance;
-        uint256 withdrawAmount = _amount == 0 ? balance : _amount;
+        if (balance < _amount) revert InsufficientBalance();
 
-        if (withdrawAmount > balance) {
-            withdrawAmount = balance;
-        }
-
-        (bool success,) = _to.call{value: withdrawAmount}("");
+        (bool success,) = payable(_to).call{value: _amount}("");
         if (!success) revert WithdrawalFailed();
-
-        emit FundsWithdrawn(_to, withdrawAmount);
+        emit FundsWithdrawn(_to, _amount);
     }
 
-    function _executeWithdrawTokens(address _to) internal {
+    function _executeWithdrawTokens(address _to, uint256 _amount) internal validAddress(_to) validAmount(_amount) {
         if (paymentToken == address(0)) revert ERC20PaymentNotEnabled();
 
         IERC20 token = IERC20(paymentToken);
         uint256 balance = token.balanceOf(address(this));
-        if (!token.transfer(_to, balance)) revert TokenTransferFailed();
 
-        emit TokensWithdrawn(_to, balance);
+        if (balance < _amount) revert InsufficientBalance();
+
+        token.safeTransfer(_to, _amount);
+        emit TokensWithdrawn(_to, _amount);
     }
 
     function _executeSetMintPrice(uint256 _newPrice) internal {
+        uint256 oldPrice = mintPrice;
         mintPrice = _newPrice;
-        emit MintPriceUpdated(_newPrice);
+        emit MintPriceUpdated(oldPrice, _newPrice);
     }
 
     function _executeSetTokenFee(uint256 _newFee) internal {
+        uint256 oldPrice = tokenMintPrice;
         tokenMintPrice = _newFee;
-        emit TokenMintPriceUpdated(_newFee);
+        emit TokenMintPriceUpdated(oldPrice, _newFee);
     }
 
     function _executeSetPaymentToken(address _newToken) internal {
+        address oldToken = paymentToken;
         paymentToken = _newToken;
-        emit PaymentTokenUpdated(_newToken);
+        emit PaymentTokenUpdated(oldToken, _newToken);
+    }
+
+    // ============ Receive Function ============
+
+    /**
+     * @dev Allow contract to receive ETH
+     */
+    receive() external payable {
+        // Allow contract to receive ETH for minting and other operations
     }
 }

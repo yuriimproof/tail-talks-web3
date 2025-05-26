@@ -4,12 +4,17 @@ pragma solidity ^0.8.28;
 import {ERC721} from "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import {ERC721Enumerable} from "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 /**
  * @title StarKeeper
  * @dev NFT collection with admin governance controlled by factory
+ * @notice This contract represents a themed pet collection with fixed supply and factory governance
+ * @author Yuri Improof (@yuriimproof) for TailTalks Team
  */
 contract StarKeeper is ERC721Enumerable {
+    using SafeERC20 for IERC20;
+
     // ============ State Variables ============
 
     // Core collection settings
@@ -31,24 +36,29 @@ contract StarKeeper is ERC721Enumerable {
     event Minted(address indexed to, uint256 indexed tokenId, string paymentMethod);
     event FundsWithdrawn(address indexed to, uint256 amount);
     event TokensWithdrawn(address indexed to, uint256 amount);
-    event MintPriceUpdated(uint256 newPrice);
-    event TokenMintPriceUpdated(uint256 newPrice);
-    event PaymentTokenUpdated(address newToken);
-    event BaseURIUpdated(string newURI);
-    event MaxSupplyUpdated(uint256 newMaxSupply);
-    event CollectionImageURIUpdated(string newURI);
+    event MintPriceUpdated(uint256 oldPrice, uint256 newPrice);
+    event TokenMintPriceUpdated(uint256 oldPrice, uint256 newPrice);
+    event PaymentTokenUpdated(address indexed oldToken, address indexed newToken);
+    event BaseURIUpdated(string oldURI, string newURI);
+    event MaxSupplyUpdated(uint256 oldMaxSupply, uint256 newMaxSupply);
+    event CollectionImageURIUpdated(string oldURI, string newURI);
 
     // ============ Custom Errors ============
 
     error InvalidMaxSupply();
     error MaxSupplyReached();
     error InsufficientPayment();
+    error InsufficientBalance();
     error WithdrawalFailed();
     error TokenTransferFailed();
     error ERC20PaymentNotEnabled();
     error OnlyFactoryAllowed();
     error InvalidAddress();
     error TokenDoesNotExist();
+    error InvalidParameters();
+    error SupplyTooLow();
+    error InvalidBaseURI();
+    error InvalidImageURI();
 
     // ============ Modifiers ============
 
@@ -59,6 +69,21 @@ contract StarKeeper is ERC721Enumerable {
 
     modifier validAddress(address _address) {
         if (_address == address(0)) revert InvalidAddress();
+        _;
+    }
+
+    modifier validSupply(uint256 _supply) {
+        if (_supply <= 0) revert SupplyTooLow();
+        _;
+    }
+
+    modifier validURI(string memory _uri) {
+        if (bytes(_uri).length == 0) revert InvalidParameters();
+        _;
+    }
+
+    modifier validAmount(uint256 _amount) {
+        if (_amount <= 0) revert InvalidParameters();
         _;
     }
 
@@ -84,9 +109,7 @@ contract StarKeeper is ERC721Enumerable {
         address _paymentToken,
         string memory _baseTokenURI,
         string memory _collectionImageURI
-    ) ERC721(_name, _symbol) {
-        if (_maxSupply == 0) revert InvalidMaxSupply();
-
+    ) ERC721(_name, _symbol) validSupply(_maxSupply) {
         factory = msg.sender;
         maxSupply = _maxSupply;
         baseTokenURI = _baseTokenURI;
@@ -119,9 +142,7 @@ contract StarKeeper is ERC721Enumerable {
         if (paymentToken == address(0) || tokenMintPrice == 0) revert ERC20PaymentNotEnabled();
 
         IERC20 token = IERC20(paymentToken);
-        if (!token.transferFrom(msg.sender, address(this), tokenMintPrice)) {
-            revert TokenTransferFailed();
-        }
+        token.safeTransferFrom(msg.sender, address(this), tokenMintPrice);
 
         uint256 tokenId = _mintToken(msg.sender);
         emit Minted(msg.sender, tokenId, "ERC20");
@@ -145,18 +166,20 @@ contract StarKeeper is ERC721Enumerable {
      * @dev Set the base URI (factory-only)
      * @param _newBaseURI New base URI for token metadata
      */
-    function setBaseURI(string calldata _newBaseURI) external onlyFactory {
+    function setBaseURI(string calldata _newBaseURI) external onlyFactory validURI(_newBaseURI) {
+        string memory oldURI = baseTokenURI;
         baseTokenURI = _newBaseURI;
-        emit BaseURIUpdated(_newBaseURI);
+        emit BaseURIUpdated(oldURI, _newBaseURI);
     }
 
     /**
      * @dev Set the collection image URI (factory-only)
      * @param _newImageURI New IPFS URI for the collection image
      */
-    function setCollectionImageURI(string calldata _newImageURI) external onlyFactory {
+    function setCollectionImageURI(string calldata _newImageURI) external onlyFactory validURI(_newImageURI) {
+        string memory oldURI = collectionImageURI;
         collectionImageURI = _newImageURI;
-        emit CollectionImageURIUpdated(_newImageURI);
+        emit CollectionImageURIUpdated(oldURI, _newImageURI);
     }
 
     /**
@@ -164,8 +187,9 @@ contract StarKeeper is ERC721Enumerable {
      * @param _newPrice New price in native tokens
      */
     function setMintPrice(uint256 _newPrice) external onlyFactory {
+        uint256 oldPrice = mintPrice;
         mintPrice = _newPrice;
-        emit MintPriceUpdated(_newPrice);
+        emit MintPriceUpdated(oldPrice, _newPrice);
     }
 
     /**
@@ -173,8 +197,9 @@ contract StarKeeper is ERC721Enumerable {
      * @param _newPrice New price in ERC20 tokens
      */
     function setTokenMintPrice(uint256 _newPrice) external onlyFactory {
+        uint256 oldPrice = tokenMintPrice;
         tokenMintPrice = _newPrice;
-        emit TokenMintPriceUpdated(_newPrice);
+        emit TokenMintPriceUpdated(oldPrice, _newPrice);
     }
 
     /**
@@ -182,51 +207,56 @@ contract StarKeeper is ERC721Enumerable {
      * @param _newToken New ERC20 token address
      */
     function setPaymentToken(address _newToken) external onlyFactory {
+        address oldToken = paymentToken;
         paymentToken = _newToken;
-        emit PaymentTokenUpdated(_newToken);
+        emit PaymentTokenUpdated(oldToken, _newToken);
     }
 
     /**
      * @dev Set maximum supply (factory-only)
      * @param _newMaxSupply New maximum supply (cannot be less than current totalSupply)
      */
-    function setMaxSupply(uint256 _newMaxSupply) external onlyFactory {
+    function setMaxSupply(uint256 _newMaxSupply) external onlyFactory validSupply(_newMaxSupply) {
         if (_newMaxSupply < totalSupply()) revert InvalidMaxSupply();
+        uint256 oldMaxSupply = maxSupply;
         maxSupply = _newMaxSupply;
-        emit MaxSupplyUpdated(_newMaxSupply);
+        emit MaxSupplyUpdated(oldMaxSupply, _newMaxSupply);
     }
 
     /**
      * @dev Withdraw native tokens (factory-only)
      * @param _to Address to withdraw to
-     * @param _amount Amount to withdraw (0 for all)
+     * @param _amount Amount to withdraw
      */
-    function withdrawFunds(address payable _to, uint256 _amount) external onlyFactory validAddress(_to) {
+    function withdrawFunds(address payable _to, uint256 _amount)
+        external
+        onlyFactory
+        validAddress(_to)
+        validAmount(_amount)
+    {
         uint256 balance = address(this).balance;
-        uint256 withdrawAmount = _amount == 0 ? balance : _amount;
+        if (balance < _amount) revert InsufficientBalance();
 
-        if (withdrawAmount > balance) {
-            withdrawAmount = balance;
-        }
-
-        (bool success,) = _to.call{value: withdrawAmount}("");
+        (bool success,) = _to.call{value: _amount}("");
         if (!success) revert WithdrawalFailed();
-
-        emit FundsWithdrawn(_to, withdrawAmount);
+        emit FundsWithdrawn(_to, _amount);
     }
 
     /**
      * @dev Withdraw ERC20 tokens (factory-only)
      * @param _to Address to withdraw to
+     * @param _amount Amount to withdraw
      */
-    function withdrawTokens(address _to) external onlyFactory validAddress(_to) {
+    function withdrawTokens(address _to, uint256 _amount) external onlyFactory validAddress(_to) validAmount(_amount) {
         if (paymentToken == address(0)) revert ERC20PaymentNotEnabled();
 
         IERC20 token = IERC20(paymentToken);
         uint256 balance = token.balanceOf(address(this));
-        if (!token.transfer(_to, balance)) revert TokenTransferFailed();
 
-        emit TokensWithdrawn(_to, balance);
+        if (balance < _amount) revert InsufficientBalance();
+
+        token.safeTransfer(_to, _amount);
+        emit TokensWithdrawn(_to, _amount);
     }
 
     // ============ View Functions ============
@@ -239,36 +269,10 @@ contract StarKeeper is ERC721Enumerable {
         return totalSupply();
     }
 
-    /**
-     * @dev Get collection information in one call
-     * @return name_ Collection name
-     * @return symbol_ Collection symbol
-     * @return totalSupply_ Current total supply
-     * @return maxSupply_ Maximum supply
-     * @return mintPrice_ Price in native tokens
-     * @return tokenMintPrice_ Price in ERC20 tokens
-     * @return paymentToken_ ERC20 payment token address
-     */
-    function getCollectionInfo()
-        external
-        view
-        returns (
-            string memory name_,
-            string memory symbol_,
-            uint256 totalSupply_,
-            uint256 maxSupply_,
-            uint256 mintPrice_,
-            uint256 tokenMintPrice_,
-            address paymentToken_
-        )
-    {
-        return (name(), symbol(), totalSupply(), maxSupply, mintPrice, tokenMintPrice, paymentToken);
-    }
-
     // ============ Internal Functions ============
 
     /**
-     * @dev Internal minting logic
+     * @dev Internal minting logic with enhanced checks
      * @param _to Address to mint to
      * @return tokenId The ID of the minted token
      */
@@ -284,7 +288,7 @@ contract StarKeeper is ERC721Enumerable {
     }
 
     /**
-     * @dev Override tokenURI to use baseTokenURI
+     * @dev Override tokenURI to use baseTokenURI with enhanced validation
      * @param tokenId Token ID to get URI for
      * @return The complete token URI
      */
@@ -292,4 +296,11 @@ contract StarKeeper is ERC721Enumerable {
         if (tokenId == 0 || tokenId >= tokenIdCounter) revert TokenDoesNotExist();
         return baseTokenURI;
     }
+
+    // ============ Receive Function ============
+
+    /**
+     * @dev Allow contract to receive ETH
+     */
+    receive() external payable {}
 }
