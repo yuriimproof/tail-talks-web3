@@ -7,7 +7,7 @@ import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
 /**
  * @title StarKeeperFactory
- * @dev Factory contract for creating and managing StarKeeper collections
+ * @dev Factory contract for creating and managing StarKeeper _collections
  * @notice Implements 75% quorum governance for all admin operations and collection management
  * @author Yuri Improof (@yuriimproof) for TailTalks Team
  */
@@ -50,17 +50,17 @@ contract StarKeeperFactory is AccessControl {
     // ============ State Variables ============
 
     // Collections tracking
-    StarKeeper[] private collections;
-    mapping(address => StarKeeper[]) private creatorCollections;
-    mapping(address => bool) private validCollections;
+    StarKeeper[] private _collections;
+    mapping(address => StarKeeper[]) private _creatorCollections;
+    mapping(address => bool) private _validCollections;
 
     // Governance
-    address[] private admins;
+    address[] private _admins;
     uint256 public quorumThreshold;
 
     // Proposals
     uint256 public proposalCounter;
-    mapping(uint256 => Proposal) private proposals;
+    mapping(uint256 => Proposal) private _proposals;
 
     // ============ Events ============
 
@@ -112,28 +112,28 @@ contract StarKeeperFactory is AccessControl {
 
     // ============ Modifiers ============
 
-    modifier validAddress(address _address) {
-        if (_address == address(0)) revert InvalidAdminAddress();
+    modifier validAddress(address address_) {
+        if (address_ == address(0)) revert InvalidAdminAddress();
         _;
     }
 
-    modifier validCollection(address _collection) {
-        if (!validCollections[_collection]) revert InvalidCollectionAddress();
+    modifier validCollection(address collection_) {
+        if (!_validCollections[collection_]) revert InvalidCollectionAddress();
         _;
     }
 
-    modifier proposalExists(uint256 _proposalId) {
-        if (proposals[_proposalId].id == 0) revert ProposalNotFound();
+    modifier proposalExists(uint256 proposalId_) {
+        if (_proposals[proposalId_].id == 0) revert ProposalNotFound();
         _;
     }
 
-    modifier validString(string calldata _str) {
-        if (bytes(_str).length == 0) revert InvalidString();
+    modifier validString(string calldata str_) {
+        if (bytes(str_).length == 0) revert InvalidString();
         _;
     }
 
-    modifier validSupply(uint256 _supply) {
-        if (_supply < 1) revert SupplyTooLow();
+    modifier validSupply(uint256 supply_) {
+        if (supply_ < 1) revert SupplyTooLow();
         _;
     }
 
@@ -141,19 +141,19 @@ contract StarKeeperFactory is AccessControl {
 
     /**
      * @dev Initialize factory with admin governance
-     * @param _admins Initial admin addresses
+     * @param admins_ Initial admin addresses
      */
-    constructor(address[] memory _admins) {
-        if (_admins.length == 0) revert InvalidAdminAddress();
+    constructor(address[] memory admins_) {
+        if (admins_.length == 0) revert InvalidAdminAddress();
 
-        for (uint256 i = 0; i < _admins.length; i++) {
-            if (_admins[i] == address(0)) revert InvalidAdminAddress();
-            _grantRole(ADMIN_ROLE, _admins[i]);
-            admins.push(_admins[i]);
+        for (uint256 i = 0; i < admins_.length; i++) {
+            if (admins_[i] == address(0)) revert InvalidAdminAddress();
+            _grantRole(ADMIN_ROLE, admins_[i]);
+            _admins.push(admins_[i]);
         }
 
         _updateQuorumThreshold();
-        emit AdminsInitialized(_admins.length, quorumThreshold);
+        emit AdminsInitialized(admins_.length, quorumThreshold);
     }
 
     // ============ Proposal Creation Functions ============
@@ -162,17 +162,17 @@ contract StarKeeperFactory is AccessControl {
      * @dev Create proposal to deploy new collection
      */
     function createCollectionProposal(
-        string calldata _name,
-        string calldata _symbol,
-        uint256 _maxSupply,
-        uint256 _mintPrice,
-        uint256 _tokenMintPrice,
-        address _paymentToken,
-        string calldata _baseTokenURI,
-        string calldata _collectionImageURI
-    ) external onlyRole(ADMIN_ROLE) validString(_name) validString(_symbol) validSupply(_maxSupply) returns (uint256) {
+        string calldata name_,
+        string calldata symbol_,
+        uint256 maxSupply_,
+        uint256 mintPrice_,
+        uint256 tokenMintPrice_,
+        address paymentToken_,
+        string calldata baseTokenURI_,
+        string calldata collectionImageURI_
+    ) external onlyRole(ADMIN_ROLE) validString(name_) validString(symbol_) validSupply(maxSupply_) returns (uint256) {
         bytes memory functionData = abi.encode(
-            _name, _symbol, _maxSupply, _mintPrice, _tokenMintPrice, _paymentToken, _baseTokenURI, _collectionImageURI
+            name_, symbol_, maxSupply_, mintPrice_, tokenMintPrice_, paymentToken_, baseTokenURI_, collectionImageURI_
         );
 
         return _createProposal(FunctionType.CreateCollection, functionData);
@@ -181,144 +181,144 @@ contract StarKeeperFactory is AccessControl {
     /**
      * @dev Create proposal to add factory admin
      */
-    function createAddAdminProposal(address _admin)
+    function createAddAdminProposal(address admin_)
         external
         onlyRole(ADMIN_ROLE)
-        validAddress(_admin)
+        validAddress(admin_)
         returns (uint256)
     {
-        if (hasRole(ADMIN_ROLE, _admin)) revert AdminAlreadyExists();
+        if (hasRole(ADMIN_ROLE, admin_)) revert AdminAlreadyExists();
 
-        return _createProposal(FunctionType.AddFactoryAdmin, abi.encode(_admin));
+        return _createProposal(FunctionType.AddFactoryAdmin, abi.encode(admin_));
     }
 
     /**
      * @dev Create proposal to remove factory admin
      */
-    function createRemoveAdminProposal(address _admin)
+    function createRemoveAdminProposal(address admin_)
         external
         onlyRole(ADMIN_ROLE)
-        validAddress(_admin)
+        validAddress(admin_)
         returns (uint256)
     {
-        if (!hasRole(ADMIN_ROLE, _admin)) revert AdminDoesNotExist();
-        if (admins.length <= 1) revert LastAdminCannotBeRemoved();
+        if (!hasRole(ADMIN_ROLE, admin_)) revert AdminDoesNotExist();
+        if (_admins.length <= 1) revert LastAdminCannotBeRemoved();
 
-        return _createProposal(FunctionType.RemoveFactoryAdmin, abi.encode(_admin));
+        return _createProposal(FunctionType.RemoveFactoryAdmin, abi.encode(admin_));
     }
 
     /**
      * @dev Create proposal to update collection base URI
      */
-    function createSetBaseURIProposal(address _collection, string calldata _newBaseURI)
+    function createSetBaseURIProposal(address collection_, string calldata newBaseURI_)
         external
         onlyRole(ADMIN_ROLE)
-        validCollection(_collection)
-        validString(_newBaseURI)
+        validCollection(collection_)
+        validString(newBaseURI_)
         returns (uint256)
     {
-        return _createProposal(FunctionType.SetBaseURI, abi.encode(_collection, _newBaseURI));
+        return _createProposal(FunctionType.SetBaseURI, abi.encode(collection_, newBaseURI_));
     }
 
     /**
      * @dev Create proposal to update collection mint price
      */
-    function createSetMintPriceProposal(address _collection, uint256 _newPrice)
+    function createSetMintPriceProposal(address collection_, uint256 newPrice_)
         external
         onlyRole(ADMIN_ROLE)
-        validCollection(_collection)
+        validCollection(collection_)
         returns (uint256)
     {
-        return _createProposal(FunctionType.SetMintPrice, abi.encode(_collection, _newPrice));
+        return _createProposal(FunctionType.SetMintPrice, abi.encode(collection_, newPrice_));
     }
 
     /**
      * @dev Create proposal to update collection token mint price
      */
-    function createSetTokenMintPriceProposal(address _collection, uint256 _newPrice)
+    function createSetTokenMintPriceProposal(address collection_, uint256 newPrice_)
         external
         onlyRole(ADMIN_ROLE)
-        validCollection(_collection)
+        validCollection(collection_)
         returns (uint256)
     {
-        return _createProposal(FunctionType.SetTokenMintPrice, abi.encode(_collection, _newPrice));
+        return _createProposal(FunctionType.SetTokenMintPrice, abi.encode(collection_, newPrice_));
     }
 
     /**
      * @dev Create proposal to update collection payment token
      */
-    function createSetPaymentTokenProposal(address _collection, address _newToken)
+    function createSetPaymentTokenProposal(address collection_, address newToken_)
         external
         onlyRole(ADMIN_ROLE)
-        validCollection(_collection)
+        validCollection(collection_)
         returns (uint256)
     {
-        return _createProposal(FunctionType.SetPaymentToken, abi.encode(_collection, _newToken));
+        return _createProposal(FunctionType.SetPaymentToken, abi.encode(collection_, newToken_));
     }
 
     /**
      * @dev Create proposal to update collection image URI
      */
-    function createSetImageURIProposal(address _collection, string calldata _newImageURI)
+    function createSetImageURIProposal(address collection_, string calldata newImageURI_)
         external
         onlyRole(ADMIN_ROLE)
-        validCollection(_collection)
-        validString(_newImageURI)
+        validCollection(collection_)
+        validString(newImageURI_)
         returns (uint256)
     {
-        return _createProposal(FunctionType.SetCollectionImageURI, abi.encode(_collection, _newImageURI));
+        return _createProposal(FunctionType.SetCollectionImageURI, abi.encode(collection_, newImageURI_));
     }
 
     /**
      * @dev Create proposal to update collection max supply
      */
-    function createSetMaxSupplyProposal(address _collection, uint256 _newMaxSupply)
+    function createSetMaxSupplyProposal(address collection_, uint256 newMaxSupply_)
         external
         onlyRole(ADMIN_ROLE)
-        validCollection(_collection)
-        validSupply(_newMaxSupply)
+        validCollection(collection_)
+        validSupply(newMaxSupply_)
         returns (uint256)
     {
-        return _createProposal(FunctionType.SetMaxSupply, abi.encode(_collection, _newMaxSupply));
+        return _createProposal(FunctionType.SetMaxSupply, abi.encode(collection_, newMaxSupply_));
     }
 
     /**
      * @dev Create proposal to mint token to specific address
      */
-    function createMintToProposal(address _collection, address _to)
+    function createMintToProposal(address collection_, address to_)
         external
         onlyRole(ADMIN_ROLE)
-        validCollection(_collection)
-        validAddress(_to)
+        validCollection(collection_)
+        validAddress(to_)
         returns (uint256)
     {
-        return _createProposal(FunctionType.MintToAddress, abi.encode(_collection, _to));
+        return _createProposal(FunctionType.MintToAddress, abi.encode(collection_, to_));
     }
 
     /**
      * @dev Create proposal to withdraw native tokens from collection
      */
-    function createWithdrawFundsProposal(address _collection, address _to, uint256 _amount)
+    function createWithdrawFundsProposal(address collection_, address to_, uint256 amount_)
         external
         onlyRole(ADMIN_ROLE)
-        validCollection(_collection)
-        validAddress(_to)
+        validCollection(collection_)
+        validAddress(to_)
         returns (uint256)
     {
-        return _createProposal(FunctionType.WithdrawFunds, abi.encode(_collection, _to, _amount));
+        return _createProposal(FunctionType.WithdrawFunds, abi.encode(collection_, to_, amount_));
     }
 
     /**
      * @dev Create proposal to withdraw ERC20 tokens from collection
      */
-    function createWithdrawTokensProposal(address _collection, address _to)
+    function createWithdrawTokensProposal(address collection_, address to_, uint256 amount_)
         external
         onlyRole(ADMIN_ROLE)
-        validCollection(_collection)
-        validAddress(_to)
+        validCollection(collection_)
+        validAddress(to_)
         returns (uint256)
     {
-        return _createProposal(FunctionType.WithdrawTokens, abi.encode(_collection, _to));
+        return _createProposal(FunctionType.WithdrawTokens, abi.encode(collection_, to_, amount_));
     }
 
     // ============ Voting Functions ============
@@ -326,8 +326,8 @@ contract StarKeeperFactory is AccessControl {
     /**
      * @dev Vote for existing proposal
      */
-    function voteForProposal(uint256 _proposalId) external onlyRole(ADMIN_ROLE) proposalExists(_proposalId) {
-        Proposal storage proposal = proposals[_proposalId];
+    function voteForProposal(uint256 proposalId_) external onlyRole(ADMIN_ROLE) proposalExists(proposalId_) {
+        Proposal storage proposal = _proposals[proposalId_];
 
         if (proposal.executed) revert ProposalAlreadyExecuted();
         if (block.timestamp > proposal.expirationTime) revert ProposalExpired();
@@ -339,13 +339,13 @@ contract StarKeeperFactory is AccessControl {
             ++proposal.approvalCount;
         }
 
-        emit ProposalVoted(_proposalId, msg.sender);
+        emit ProposalVoted(proposalId_, msg.sender);
 
         // Execute if quorum reached
         if (proposal.approvalCount >= quorumThreshold) {
             proposal.executed = true;
             _executeProposal(proposal.functionType, proposal.functionData);
-            emit ProposalExecuted(_proposalId, proposal.functionType);
+            emit ProposalExecuted(proposalId_, proposal.functionType);
         }
     }
 
@@ -354,10 +354,10 @@ contract StarKeeperFactory is AccessControl {
     /**
      * @dev Get proposal details
      */
-    function getProposalDetails(uint256 _proposalId)
+    function getProposalDetails(uint256 proposalId_)
         external
         view
-        proposalExists(_proposalId)
+        proposalExists(proposalId_)
         returns (
             address proposer,
             uint256 createdAt,
@@ -367,7 +367,7 @@ contract StarKeeperFactory is AccessControl {
             FunctionType functionType
         )
     {
-        Proposal storage proposal = proposals[_proposalId];
+        Proposal storage proposal = _proposals[proposalId_];
         return (
             proposal.proposer,
             proposal.createdAt,
@@ -381,53 +381,53 @@ contract StarKeeperFactory is AccessControl {
     /**
      * @dev Check if admin has voted for proposal
      */
-    function hasVotedForProposal(uint256 _proposalId, address _admin)
+    function hasVotedForProposal(uint256 proposalId_, address admin_)
         external
         view
-        proposalExists(_proposalId)
+        proposalExists(proposalId_)
         returns (bool)
     {
-        return proposals[_proposalId].hasVoted[_admin];
+        return _proposals[proposalId_].hasVoted[admin_];
     }
 
     /**
      * @dev Get proposal function data
      */
-    function getProposalFunctionData(uint256 _proposalId)
+    function getProposalFunctionData(uint256 proposalId_)
         external
         view
-        proposalExists(_proposalId)
+        proposalExists(proposalId_)
         returns (bytes memory)
     {
-        return proposals[_proposalId].functionData;
+        return _proposals[proposalId_].functionData;
     }
 
     /**
-     * @dev Get all collections created by factory
+     * @dev Get all _collections created by factory
      */
     function getAllCollections() external view returns (StarKeeper[] memory) {
-        return collections;
+        return _collections;
     }
 
     /**
-     * @dev Get collections created by specific address
+     * @dev Get _collections created by specific address
      */
-    function getCreatorCollections(address _creator) external view returns (StarKeeper[] memory) {
-        return creatorCollections[_creator];
+    function getCreatorCollections(address creator_) external view returns (StarKeeper[] memory) {
+        return _creatorCollections[creator_];
     }
 
     /**
      * @dev Check if collection was created by this factory
      */
-    function isCollectionFromFactory(address _collection) external view returns (bool) {
-        return validCollections[_collection];
+    function isCollectionFromFactory(address collection_) external view returns (bool) {
+        return _validCollections[collection_];
     }
 
     /**
      * @dev Get current admin addresses
      */
     function getAdmins() external view returns (address[] memory) {
-        return admins;
+        return _admins;
     }
 
     // ============ Internal Functions ============
@@ -435,29 +435,29 @@ contract StarKeeperFactory is AccessControl {
     /**
      * @dev Create new proposal with auto-approval from creator
      */
-    function _createProposal(FunctionType _functionType, bytes memory _functionData) internal returns (uint256) {
+    function _createProposal(FunctionType functionType_, bytes memory functionData_) internal returns (uint256) {
         unchecked {
             ++proposalCounter;
         }
         uint256 proposalId = proposalCounter;
 
-        Proposal storage proposal = proposals[proposalId];
+        Proposal storage proposal = _proposals[proposalId];
         proposal.id = proposalId;
         proposal.proposer = msg.sender;
         proposal.createdAt = block.timestamp;
         proposal.expirationTime = block.timestamp + PROPOSAL_DURATION;
-        proposal.functionType = _functionType;
-        proposal.functionData = _functionData;
+        proposal.functionType = functionType_;
+        proposal.functionData = functionData_;
         proposal.hasVoted[msg.sender] = true;
         proposal.approvalCount = 1;
 
-        emit ProposalCreated(proposalId, _functionType, msg.sender);
+        emit ProposalCreated(proposalId, functionType_, msg.sender);
 
         // Auto-execute if single admin or quorum = 1
         if (quorumThreshold == 1) {
             proposal.executed = true;
-            _executeProposal(_functionType, _functionData);
-            emit ProposalExecuted(proposalId, _functionType);
+            _executeProposal(functionType_, functionData_);
+            emit ProposalExecuted(proposalId, functionType_);
         }
 
         return proposalId;
@@ -466,31 +466,31 @@ contract StarKeeperFactory is AccessControl {
     /**
      * @dev Execute approved proposal
      */
-    function _executeProposal(FunctionType _functionType, bytes memory _functionData) internal {
-        if (_functionType == FunctionType.CreateCollection) {
-            _executeCreateCollection(_functionData);
-        } else if (_functionType == FunctionType.AddFactoryAdmin) {
-            _executeAddAdmin(_functionData);
-        } else if (_functionType == FunctionType.RemoveFactoryAdmin) {
-            _executeRemoveAdmin(_functionData);
-        } else if (_functionType == FunctionType.SetBaseURI) {
-            _executeSetBaseURI(_functionData);
-        } else if (_functionType == FunctionType.SetMintPrice) {
-            _executeSetMintPrice(_functionData);
-        } else if (_functionType == FunctionType.SetTokenMintPrice) {
-            _executeSetTokenMintPrice(_functionData);
-        } else if (_functionType == FunctionType.SetPaymentToken) {
-            _executeSetPaymentToken(_functionData);
-        } else if (_functionType == FunctionType.SetCollectionImageURI) {
-            _executeSetImageURI(_functionData);
-        } else if (_functionType == FunctionType.SetMaxSupply) {
-            _executeSetMaxSupply(_functionData);
-        } else if (_functionType == FunctionType.MintToAddress) {
-            _executeMintTo(_functionData);
-        } else if (_functionType == FunctionType.WithdrawFunds) {
-            _executeWithdrawFunds(_functionData);
-        } else if (_functionType == FunctionType.WithdrawTokens) {
-            _executeWithdrawTokens(_functionData);
+    function _executeProposal(FunctionType functionType_, bytes memory functionData_) internal {
+        if (functionType_ == FunctionType.CreateCollection) {
+            _executeCreateCollection(functionData_);
+        } else if (functionType_ == FunctionType.AddFactoryAdmin) {
+            _executeAddAdmin(functionData_);
+        } else if (functionType_ == FunctionType.RemoveFactoryAdmin) {
+            _executeRemoveAdmin(functionData_);
+        } else if (functionType_ == FunctionType.SetBaseURI) {
+            _executeSetBaseURI(functionData_);
+        } else if (functionType_ == FunctionType.SetMintPrice) {
+            _executeSetMintPrice(functionData_);
+        } else if (functionType_ == FunctionType.SetTokenMintPrice) {
+            _executeSetTokenMintPrice(functionData_);
+        } else if (functionType_ == FunctionType.SetPaymentToken) {
+            _executeSetPaymentToken(functionData_);
+        } else if (functionType_ == FunctionType.SetCollectionImageURI) {
+            _executeSetImageURI(functionData_);
+        } else if (functionType_ == FunctionType.SetMaxSupply) {
+            _executeSetMaxSupply(functionData_);
+        } else if (functionType_ == FunctionType.MintToAddress) {
+            _executeMintTo(functionData_);
+        } else if (functionType_ == FunctionType.WithdrawFunds) {
+            _executeWithdrawFunds(functionData_);
+        } else if (functionType_ == FunctionType.WithdrawTokens) {
+            _executeWithdrawTokens(functionData_);
         }
     }
 
@@ -498,7 +498,7 @@ contract StarKeeperFactory is AccessControl {
      * @dev Update quorum threshold based on admin count
      */
     function _updateQuorumThreshold() internal {
-        uint256 adminCount = admins.length;
+        uint256 adminCount = _admins.length;
         uint256 threshold;
 
         if (adminCount <= 1) {
@@ -514,7 +514,7 @@ contract StarKeeperFactory is AccessControl {
 
     // ============ Execution Functions ============
 
-    function _executeCreateCollection(bytes memory _functionData) internal {
+    function _executeCreateCollection(bytes memory functionData_) internal {
         (
             string memory name,
             string memory symbol,
@@ -524,40 +524,40 @@ contract StarKeeperFactory is AccessControl {
             address paymentToken,
             string memory baseTokenURI,
             string memory collectionImageURI
-        ) = abi.decode(_functionData, (string, string, uint256, uint256, uint256, address, string, string));
+        ) = abi.decode(functionData_, (string, string, uint256, uint256, uint256, address, string, string));
 
         StarKeeper newCollection = new StarKeeper(
             name, symbol, maxSupply, mintPrice, tokenMintPrice, paymentToken, baseTokenURI, collectionImageURI
         );
 
         address collectionAddress = address(newCollection);
-        collections.push(newCollection);
-        creatorCollections[msg.sender].push(newCollection);
-        validCollections[collectionAddress] = true;
+        _collections.push(newCollection);
+        _creatorCollections[msg.sender].push(newCollection);
+        _validCollections[collectionAddress] = true;
 
         emit CollectionCreated(
             msg.sender, collectionAddress, name, maxSupply, mintPrice, paymentToken, tokenMintPrice, collectionImageURI
         );
     }
 
-    function _executeAddAdmin(bytes memory _functionData) internal {
-        address admin = abi.decode(_functionData, (address));
+    function _executeAddAdmin(bytes memory functionData_) internal {
+        address admin = abi.decode(functionData_, (address));
 
         _grantRole(ADMIN_ROLE, admin);
-        admins.push(admin);
+        _admins.push(admin);
         _updateQuorumThreshold();
 
         emit AdminAdded(admin);
     }
 
-    function _executeRemoveAdmin(bytes memory _functionData) internal {
-        address admin = abi.decode(_functionData, (address));
+    function _executeRemoveAdmin(bytes memory functionData_) internal {
+        address admin = abi.decode(functionData_, (address));
 
         // Remove from admins array
-        for (uint256 i = 0; i < admins.length; i++) {
-            if (admins[i] == admin) {
-                admins[i] = admins[admins.length - 1];
-                admins.pop();
+        for (uint256 i = 0; i < _admins.length; i++) {
+            if (_admins[i] == admin) {
+                _admins[i] = _admins[_admins.length - 1];
+                _admins.pop();
                 break;
             }
         }
@@ -568,8 +568,8 @@ contract StarKeeperFactory is AccessControl {
         emit AdminRemoved(admin);
     }
 
-    function _executeSetBaseURI(bytes memory _functionData) internal {
-        (address payable collectionAddress, string memory newBaseURI) = abi.decode(_functionData, (address, string));
+    function _executeSetBaseURI(bytes memory functionData_) internal {
+        (address payable collectionAddress, string memory newBaseURI) = abi.decode(functionData_, (address, string));
 
         try StarKeeper(collectionAddress).setBaseURI(newBaseURI) {
             emit BaseURIUpdated(collectionAddress, newBaseURI);
@@ -578,8 +578,8 @@ contract StarKeeperFactory is AccessControl {
         }
     }
 
-    function _executeSetMintPrice(bytes memory _functionData) internal {
-        (address payable collectionAddress, uint256 newPrice) = abi.decode(_functionData, (address, uint256));
+    function _executeSetMintPrice(bytes memory functionData_) internal {
+        (address payable collectionAddress, uint256 newPrice) = abi.decode(functionData_, (address, uint256));
 
         try StarKeeper(collectionAddress).setMintPrice(newPrice) {
             emit MintPriceUpdated(collectionAddress, newPrice); // Simplified event
@@ -588,8 +588,8 @@ contract StarKeeperFactory is AccessControl {
         }
     }
 
-    function _executeSetTokenMintPrice(bytes memory _functionData) internal {
-        (address payable collectionAddress, uint256 newPrice) = abi.decode(_functionData, (address, uint256));
+    function _executeSetTokenMintPrice(bytes memory functionData_) internal {
+        (address payable collectionAddress, uint256 newPrice) = abi.decode(functionData_, (address, uint256));
 
         try StarKeeper(collectionAddress).setTokenMintPrice(newPrice) {
             emit TokenMintPriceUpdated(collectionAddress, newPrice); // Simplified event
@@ -598,8 +598,8 @@ contract StarKeeperFactory is AccessControl {
         }
     }
 
-    function _executeSetPaymentToken(bytes memory _functionData) internal {
-        (address payable collectionAddress, address newToken) = abi.decode(_functionData, (address, address));
+    function _executeSetPaymentToken(bytes memory functionData_) internal {
+        (address payable collectionAddress, address newToken) = abi.decode(functionData_, (address, address));
 
         try StarKeeper(collectionAddress).setPaymentToken(newToken) {
             emit PaymentTokenUpdated(collectionAddress, newToken); // Simplified event
@@ -608,8 +608,8 @@ contract StarKeeperFactory is AccessControl {
         }
     }
 
-    function _executeSetImageURI(bytes memory _functionData) internal {
-        (address payable collectionAddress, string memory newImageURI) = abi.decode(_functionData, (address, string));
+    function _executeSetImageURI(bytes memory functionData_) internal {
+        (address payable collectionAddress, string memory newImageURI) = abi.decode(functionData_, (address, string));
 
         try StarKeeper(collectionAddress).setCollectionImageURI(newImageURI) {
             emit CollectionImageURIUpdated(collectionAddress, newImageURI); // Simplified event
@@ -618,8 +618,8 @@ contract StarKeeperFactory is AccessControl {
         }
     }
 
-    function _executeSetMaxSupply(bytes memory _functionData) internal {
-        (address payable collectionAddress, uint256 newMaxSupply) = abi.decode(_functionData, (address, uint256));
+    function _executeSetMaxSupply(bytes memory functionData_) internal {
+        (address payable collectionAddress, uint256 newMaxSupply) = abi.decode(functionData_, (address, uint256));
 
         try StarKeeper(collectionAddress).setMaxSupply(newMaxSupply) {
             emit MaxSupplyUpdated(collectionAddress, newMaxSupply); // Simplified event
@@ -628,8 +628,8 @@ contract StarKeeperFactory is AccessControl {
         }
     }
 
-    function _executeMintTo(bytes memory _functionData) internal {
-        (address payable collectionAddress, address recipient) = abi.decode(_functionData, (address, address));
+    function _executeMintTo(bytes memory functionData_) internal {
+        (address payable collectionAddress, address recipient) = abi.decode(functionData_, (address, address));
 
         try StarKeeper(collectionAddress).mintTo(recipient) returns (uint256 tokenId) {
             emit TokenMinted(collectionAddress, recipient, tokenId);
@@ -638,9 +638,9 @@ contract StarKeeperFactory is AccessControl {
         }
     }
 
-    function _executeWithdrawFunds(bytes memory _functionData) internal {
+    function _executeWithdrawFunds(bytes memory functionData_) internal {
         (address payable collectionAddress, address recipient, uint256 amount) =
-            abi.decode(_functionData, (address, address, uint256));
+            abi.decode(functionData_, (address, address, uint256));
 
         try StarKeeper(collectionAddress).withdrawFunds(payable(recipient), amount) {
             emit FundsWithdrawn(collectionAddress, recipient, amount);
@@ -649,10 +649,11 @@ contract StarKeeperFactory is AccessControl {
         }
     }
 
-    function _executeWithdrawTokens(bytes memory _functionData) internal {
-        (address payable collectionAddress, address recipient) = abi.decode(_functionData, (address, address));
+    function _executeWithdrawTokens(bytes memory functionData_) internal {
+        (address payable collectionAddress, address recipient, uint256 amount) =
+            abi.decode(functionData_, (address, address, uint256));
 
-        try StarKeeper(collectionAddress).withdrawTokens(recipient) {
+        try StarKeeper(collectionAddress).withdrawTokens(recipient, amount) {
             emit TokensWithdrawn(collectionAddress, recipient);
         } catch {
             revert CollectionOperationFailed();

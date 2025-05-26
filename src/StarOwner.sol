@@ -51,8 +51,8 @@ contract StarOwner is ERC721, AccessControl {
     // ============ State Variables ============
 
     // Core NFT settings
-    uint256 private tokenIdCounter = 1;
-    mapping(uint256 tokenId => string ipfsURI) private tokenURIs; // Individual IPFS URIs for each token
+    uint256 private _tokenIdCounter = 1;
+    mapping(uint256 tokenId => string ipfsURI) private _tokenURIs; // Individual IPFS URIs for each token
 
     // Pricing
     uint256 public mintPrice;
@@ -60,12 +60,12 @@ contract StarOwner is ERC721, AccessControl {
     address public paymentToken;
 
     // Governance
-    address[] private admins;
+    address[] private _admins;
     uint256 public quorumThreshold;
 
     // Proposals
-    uint256 private proposalCounter;
-    mapping(uint256 => Proposal) private proposals;
+    uint256 private _proposalCounter;
+    mapping(uint256 => Proposal) private _proposals;
 
     // ============ Events ============
 
@@ -104,18 +104,18 @@ contract StarOwner is ERC721, AccessControl {
     error LastAdminCannotBeRemoved();
     // ============ Modifiers ============
 
-    modifier validAddress(address _address) {
-        if (_address == address(0)) revert InvalidAddress();
+    modifier validAddress(address address_) {
+        if (address_ == address(0)) revert InvalidAddress();
         _;
     }
 
-    modifier proposalExists(uint256 _proposalId) {
-        if (proposals[_proposalId].id == 0) revert ProposalNotFound();
+    modifier proposalExists(uint256 proposalId_) {
+        if (_proposals[proposalId_].id == 0) revert ProposalNotFound();
         _;
     }
 
-    modifier validAmount(uint256 _amount) {
-        if (_amount <= 0) revert InvalidParameters();
+    modifier validAmount(uint256 amount_) {
+        if (amount_ <= 0) revert InvalidParameters();
         _;
     }
 
@@ -123,27 +123,27 @@ contract StarOwner is ERC721, AccessControl {
 
     /**
      * @dev Constructor sets up collection
-     * @param _name Collection name
-     * @param _symbol Collection symbol
-     * @param _mintPrice Price in native tokens to mint one NFT
-     * @param _tokenMintPrice Price in ERC20 tokens to mint one NFT
-     * @param _paymentToken Address of ERC20 token for payments (address(0) if not using ERC20)
+     * @param name_ Collection name
+     * @param symbol_ Collection symbol
+     * @param mintPrice_ Price in native tokens to mint one NFT
+     * @param tokenMintPrice_ Price in ERC20 tokens to mint one NFT
+     * @param paymentToken_ Address of ERC20 token for payments (address(0) if not using ERC20)
      */
     constructor(
-        string memory _name,
-        string memory _symbol,
-        uint256 _mintPrice,
-        uint256 _tokenMintPrice,
-        address _paymentToken
-    ) ERC721(_name, _symbol) {
-        mintPrice = _mintPrice;
-        tokenMintPrice = _tokenMintPrice;
-        paymentToken = _paymentToken;
+        string memory name_,
+        string memory symbol_,
+        uint256 mintPrice_,
+        uint256 tokenMintPrice_,
+        address paymentToken_
+    ) ERC721(name_, symbol_) {
+        mintPrice = mintPrice_;
+        tokenMintPrice = tokenMintPrice_;
+        paymentToken = paymentToken_;
 
         // Initialize admin system
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _grantRole(ADMIN_ROLE, msg.sender);
-        admins.push(msg.sender);
+        _admins.push(msg.sender);
         quorumThreshold = 1;
 
         emit AdminAdded(msg.sender);
@@ -153,20 +153,20 @@ contract StarOwner is ERC721, AccessControl {
 
     /**
      * @dev Mint NFT with native currency payment and custom photo
-     * @param ipfsURI IPFS URI for the pet photo (ipfs://...)
+     * @param ipfsURI_ IPFS URI for the pet photo (ipfs://...)
      * @return tokenId The ID of the minted token
      */
-    function mint(string calldata ipfsURI) external payable returns (uint256) {
-        if (bytes(ipfsURI).length == 0) revert InvalidParameters();
+    function mint(string calldata ipfsURI_) external payable returns (uint256) {
+        if (bytes(ipfsURI_).length == 0) revert InvalidParameters();
         if (msg.value < mintPrice) revert InsufficientBalance();
 
-        uint256 tokenId = tokenIdCounter;
+        uint256 tokenId = _tokenIdCounter;
         unchecked {
-            ++tokenIdCounter;
+            ++_tokenIdCounter;
         }
 
         // Store individual IPFS URI for this token
-        tokenURIs[tokenId] = ipfsURI;
+        _tokenURIs[tokenId] = ipfsURI_;
 
         _safeMint(msg.sender, tokenId);
         emit TokenMinted(msg.sender, tokenId, "ETH");
@@ -175,23 +175,23 @@ contract StarOwner is ERC721, AccessControl {
 
     /**
      * @dev Mint NFT with ERC20 token payment and custom photo
-     * @param ipfsURI IPFS URI for the pet photo (ipfs://...)
+     * @param ipfsURI_ IPFS URI for the pet photo (ipfs://...)
      * @return tokenId The ID of the minted token
      */
-    function mintWithToken(string calldata ipfsURI) external returns (uint256) {
-        if (bytes(ipfsURI).length == 0) revert InvalidParameters();
+    function mintWithToken(string calldata ipfsURI_) external returns (uint256) {
+        if (bytes(ipfsURI_).length == 0) revert InvalidParameters();
         if (paymentToken == address(0) || tokenMintPrice == 0) revert ERC20PaymentNotEnabled();
 
         IERC20 token = IERC20(paymentToken);
         token.safeTransferFrom(msg.sender, address(this), tokenMintPrice);
 
-        uint256 tokenId = tokenIdCounter;
+        uint256 tokenId = _tokenIdCounter;
         unchecked {
-            ++tokenIdCounter;
+            ++_tokenIdCounter;
         }
 
         // Store individual IPFS URI for this token
-        tokenURIs[tokenId] = ipfsURI;
+        _tokenURIs[tokenId] = ipfsURI_;
 
         _safeMint(msg.sender, tokenId);
         emit TokenMinted(msg.sender, tokenId, "ERC20");
@@ -203,85 +203,85 @@ contract StarOwner is ERC721, AccessControl {
     /**
      * @dev Create proposal to add admin
      */
-    function createAddAdminProposal(address _admin)
+    function createAddAdminProposal(address admin_)
         external
         onlyRole(ADMIN_ROLE)
-        validAddress(_admin)
+        validAddress(admin_)
         returns (uint256)
     {
-        if (hasRole(ADMIN_ROLE, _admin)) revert AdminAlreadyExists();
-        return _createProposal(ProposalType.AddAdmin, _admin, 0);
+        if (hasRole(ADMIN_ROLE, admin_)) revert AdminAlreadyExists();
+        return _createProposal(ProposalType.AddAdmin, admin_, 0);
     }
 
     /**
      * @dev Create proposal to remove admin
      */
-    function createRemoveAdminProposal(address _admin)
+    function createRemoveAdminProposal(address admin_)
         external
         onlyRole(ADMIN_ROLE)
-        validAddress(_admin)
+        validAddress(admin_)
         returns (uint256)
     {
-        if (!hasRole(ADMIN_ROLE, _admin)) revert AdminDoesNotExist();
-        if (admins.length <= 1) revert LastAdminCannotBeRemoved();
-        return _createProposal(ProposalType.RemoveAdmin, _admin, 0);
+        if (!hasRole(ADMIN_ROLE, admin_)) revert AdminDoesNotExist();
+        if (_admins.length <= 1) revert LastAdminCannotBeRemoved();
+        return _createProposal(ProposalType.RemoveAdmin, admin_, 0);
     }
 
     /**
      * @dev Create proposal to withdraw native tokens
      */
-    function createWithdrawFundsProposal(address _to, uint256 _amount)
+    function createWithdrawFundsProposal(address to_, uint256 amount_)
         external
         onlyRole(ADMIN_ROLE)
-        validAddress(_to)
+        validAddress(to_)
         returns (uint256)
     {
-        return _createProposal(ProposalType.WithdrawFunds, _to, _amount);
+        return _createProposal(ProposalType.WithdrawFunds, to_, amount_);
     }
 
     /**
      * @dev Create proposal to withdraw ERC20 tokens
      */
-    function createWithdrawTokensProposal(address _to)
+    function createWithdrawTokensProposal(address to_)
         external
         onlyRole(ADMIN_ROLE)
-        validAddress(_to)
+        validAddress(to_)
         returns (uint256)
     {
-        return _createProposal(ProposalType.WithdrawTokens, _to, 0);
+        return _createProposal(ProposalType.WithdrawTokens, to_, 0);
     }
 
     /**
      * @dev Create proposal to set mint price
      */
-    function createSetMintPriceProposal(uint256 _newPrice) external onlyRole(ADMIN_ROLE) returns (uint256) {
-        return _createProposal(ProposalType.SetMintPrice, address(0), _newPrice);
+    function createSetMintPriceProposal(uint256 newPrice_) external onlyRole(ADMIN_ROLE) returns (uint256) {
+        return _createProposal(ProposalType.SetMintPrice, address(0), newPrice_);
     }
 
     /**
      * @dev Create proposal to set token mint price
      */
-    function createSetTokenFeeProposal(uint256 _newFee) external onlyRole(ADMIN_ROLE) returns (uint256) {
-        return _createProposal(ProposalType.SetTokenFee, address(0), _newFee);
+    function createSetTokenFeeProposal(uint256 newFee_) external onlyRole(ADMIN_ROLE) returns (uint256) {
+        return _createProposal(ProposalType.SetTokenFee, address(0), newFee_);
     }
 
     /**
      * @dev Create proposal to set payment token
      */
-    function createSetPaymentTokenProposal(address _newToken) external onlyRole(ADMIN_ROLE) returns (uint256) {
-        return _createProposal(ProposalType.SetPaymentToken, _newToken, 0);
+    function createSetPaymentTokenProposal(address newToken_) external onlyRole(ADMIN_ROLE) returns (uint256) {
+        return _createProposal(ProposalType.SetPaymentToken, newToken_, 0);
     }
 
     /**
      * @dev Update individual token URI (admin only, for moderation)
-     * @param tokenId Token ID to update
-     * @param newURI New IPFS URI for the token
+     * @param tokenId_ Token ID to update
+     * @param newURI_ New IPFS URI for the token
      */
-    function updateTokenURI(uint256 tokenId, string calldata newURI) external onlyRole(ADMIN_ROLE) {
-        if (tokenId == 0 || tokenId >= tokenIdCounter) revert InvalidParameters();
-        if (bytes(newURI).length == 0) revert InvalidParameters();
-        tokenURIs[tokenId] = newURI;
-        emit TokenURIUpdated(tokenId, newURI);
+    function updateTokenURI(uint256 tokenId_, string calldata newURI_) external onlyRole(ADMIN_ROLE) {
+        if (tokenId_ == 0 || tokenId_ >= _tokenIdCounter) revert InvalidParameters();
+        if (bytes(newURI_).length == 0) revert InvalidParameters();
+        _tokenURIs[tokenId_] = newURI_;
+        emit TokenURIUpdated(tokenId_, newURI_);
     }
 
     // ============ Voting Functions ============
@@ -289,8 +289,8 @@ contract StarOwner is ERC721, AccessControl {
     /**
      * @dev Vote for existing proposal
      */
-    function voteForProposal(uint256 _proposalId) external onlyRole(ADMIN_ROLE) proposalExists(_proposalId) {
-        Proposal storage proposal = proposals[_proposalId];
+    function voteForProposal(uint256 proposalId_) external onlyRole(ADMIN_ROLE) proposalExists(proposalId_) {
+        Proposal storage proposal = _proposals[proposalId_];
 
         if (proposal.executed) revert ProposalAlreadyExecuted();
         if (block.timestamp > proposal.expirationTime) revert ProposalExpired();
@@ -302,13 +302,13 @@ contract StarOwner is ERC721, AccessControl {
             ++proposal.approvalCount;
         }
 
-        emit ProposalVoted(_proposalId, msg.sender);
+        emit ProposalVoted(proposalId_, msg.sender);
 
         // Execute if quorum reached
         if (proposal.approvalCount >= quorumThreshold) {
             proposal.executed = true;
             _executeProposal(proposal.proposalType, proposal.targetAddress, proposal.value);
-            emit ProposalExecuted(_proposalId, proposal.proposalType);
+            emit ProposalExecuted(proposalId_, proposal.proposalType);
         }
     }
 
@@ -317,10 +317,10 @@ contract StarOwner is ERC721, AccessControl {
     /**
      * @dev Get proposal details
      */
-    function getProposalDetails(uint256 _proposalId)
+    function getProposalDetails(uint256 proposalId_)
         external
         view
-        proposalExists(_proposalId)
+        proposalExists(proposalId_)
         returns (
             address proposer,
             uint256 createdAt,
@@ -332,7 +332,7 @@ contract StarOwner is ERC721, AccessControl {
             uint256 value
         )
     {
-        Proposal storage proposal = proposals[_proposalId];
+        Proposal storage proposal = _proposals[proposalId_];
         return (
             proposal.proposer,
             proposal.createdAt,
@@ -348,55 +348,34 @@ contract StarOwner is ERC721, AccessControl {
     /**
      * @dev Check if admin has voted for proposal
      */
-    function hasVotedForProposal(uint256 _proposalId, address _admin)
+    function hasVotedForProposal(uint256 proposalId_, address admin_)
         external
         view
-        proposalExists(_proposalId)
+        proposalExists(proposalId_)
         returns (bool)
     {
-        return proposals[_proposalId].hasVoted[_admin];
+        return _proposals[proposalId_].hasVoted[admin_];
     }
 
     /**
      * @dev Get current admin addresses
      */
     function getAdmins() external view returns (address[] memory) {
-        return admins;
-    }
-
-    /**
-     * @dev Get contract information in one call
-     */
-    function getContractInfo()
-        external
-        view
-        returns (
-            string memory name_,
-            string memory symbol_,
-            uint256 totalSupply_,
-            uint256 mintPrice_,
-            uint256 tokenMintPrice_,
-            address paymentToken_,
-            uint256 quorumThreshold_,
-            uint256 totalProposals_
-        )
-    {
-        return
-            (name(), symbol(), totalSupply(), mintPrice, tokenMintPrice, paymentToken, quorumThreshold, proposalCounter);
+        return _admins;
     }
 
     /**
      * @dev Get total number of proposals created
      */
     function getTotalProposals() external view returns (uint256) {
-        return proposalCounter;
+        return _proposalCounter;
     }
 
     /**
      * @dev Get total supply of minted tokens
      */
     function totalSupply() public view returns (uint256) {
-        return tokenIdCounter - 1;
+        return _tokenIdCounter - 1;
     }
 
     // ============ Override Functions ============
@@ -404,17 +383,17 @@ contract StarOwner is ERC721, AccessControl {
     /**
      * @dev Override tokenURI to return individual IPFS URIs
      */
-    function tokenURI(uint256 tokenId) public view override returns (string memory) {
-        if (tokenId == 0 || tokenId >= tokenIdCounter) revert InvalidParameters();
+    function tokenURI(uint256 tokenId_) public view override returns (string memory) {
+        if (tokenId_ == 0 || tokenId_ >= _tokenIdCounter) revert InvalidParameters();
 
-        string memory individualURI = tokenURIs[tokenId];
+        string memory individualURI = _tokenURIs[tokenId_];
         if (bytes(individualURI).length == 0) revert InvalidParameters();
 
         return individualURI;
     }
 
-    function supportsInterface(bytes4 interfaceId) public view override(ERC721, AccessControl) returns (bool) {
-        return super.supportsInterface(interfaceId);
+    function supportsInterface(bytes4 interfaceId_) public view override(ERC721, AccessControl) returns (bool) {
+        return super.supportsInterface(interfaceId_);
     }
 
     // ============ Internal Functions ============
@@ -422,33 +401,33 @@ contract StarOwner is ERC721, AccessControl {
     /**
      * @dev Create new proposal with auto-approval from creator
      */
-    function _createProposal(ProposalType _proposalType, address _targetAddress, uint256 _value)
+    function _createProposal(ProposalType proposalType_, address targetAddress_, uint256 value_)
         internal
         returns (uint256)
     {
         unchecked {
-            ++proposalCounter;
+            ++_proposalCounter;
         }
-        uint256 proposalId = proposalCounter;
+        uint256 proposalId = _proposalCounter;
 
-        Proposal storage proposal = proposals[proposalId];
+        Proposal storage proposal = _proposals[proposalId];
         proposal.id = proposalId;
         proposal.proposer = msg.sender;
         proposal.createdAt = block.timestamp;
         proposal.expirationTime = block.timestamp + PROPOSAL_DURATION;
-        proposal.proposalType = _proposalType;
-        proposal.targetAddress = _targetAddress;
-        proposal.value = _value;
+        proposal.proposalType = proposalType_;
+        proposal.targetAddress = targetAddress_;
+        proposal.value = value_;
         proposal.hasVoted[msg.sender] = true;
         proposal.approvalCount = 1;
 
-        emit ProposalCreated(proposalId, _proposalType, msg.sender);
+        emit ProposalCreated(proposalId, proposalType_, msg.sender);
 
         // Auto-execute if single admin or quorum = 1
         if (quorumThreshold == 1) {
             proposal.executed = true;
-            _executeProposal(_proposalType, _targetAddress, _value);
-            emit ProposalExecuted(proposalId, _proposalType);
+            _executeProposal(proposalType_, targetAddress_, value_);
+            emit ProposalExecuted(proposalId, proposalType_);
         }
 
         return proposalId;
@@ -457,21 +436,21 @@ contract StarOwner is ERC721, AccessControl {
     /**
      * @dev Execute approved proposal
      */
-    function _executeProposal(ProposalType _proposalType, address _targetAddress, uint256 _value) internal {
-        if (_proposalType == ProposalType.AddAdmin) {
-            _executeAddAdmin(_targetAddress);
-        } else if (_proposalType == ProposalType.RemoveAdmin) {
-            _executeRemoveAdmin(_targetAddress);
-        } else if (_proposalType == ProposalType.WithdrawFunds) {
-            _executeWithdrawFunds(_targetAddress, _value);
-        } else if (_proposalType == ProposalType.WithdrawTokens) {
-            _executeWithdrawTokens(_targetAddress, _value);
-        } else if (_proposalType == ProposalType.SetMintPrice) {
-            _executeSetMintPrice(_value);
-        } else if (_proposalType == ProposalType.SetTokenFee) {
-            _executeSetTokenFee(_value);
-        } else if (_proposalType == ProposalType.SetPaymentToken) {
-            _executeSetPaymentToken(_targetAddress);
+    function _executeProposal(ProposalType proposalType_, address targetAddress_, uint256 value_) internal {
+        if (proposalType_ == ProposalType.AddAdmin) {
+            _executeAddAdmin(targetAddress_);
+        } else if (proposalType_ == ProposalType.RemoveAdmin) {
+            _executeRemoveAdmin(targetAddress_);
+        } else if (proposalType_ == ProposalType.WithdrawFunds) {
+            _executeWithdrawFunds(targetAddress_, value_);
+        } else if (proposalType_ == ProposalType.WithdrawTokens) {
+            _executeWithdrawTokens(targetAddress_, value_);
+        } else if (proposalType_ == ProposalType.SetMintPrice) {
+            _executeSetMintPrice(value_);
+        } else if (proposalType_ == ProposalType.SetTokenFee) {
+            _executeSetTokenFee(value_);
+        } else if (proposalType_ == ProposalType.SetPaymentToken) {
+            _executeSetPaymentToken(targetAddress_);
         }
     }
 
@@ -479,7 +458,7 @@ contract StarOwner is ERC721, AccessControl {
      * @dev Update quorum threshold based on admin count
      */
     function _updateQuorumThreshold() internal {
-        uint256 adminCount = admins.length;
+        uint256 adminCount = _admins.length;
         uint256 threshold;
 
         if (adminCount <= 1) {
@@ -495,65 +474,65 @@ contract StarOwner is ERC721, AccessControl {
 
     // ============ Execution Functions ============
 
-    function _executeAddAdmin(address _admin) internal {
-        _grantRole(ADMIN_ROLE, _admin);
-        admins.push(_admin);
+    function _executeAddAdmin(address admin_) internal {
+        _grantRole(ADMIN_ROLE, admin_);
+        _admins.push(admin_);
         _updateQuorumThreshold();
-        emit AdminAdded(_admin);
+        emit AdminAdded(admin_);
     }
 
-    function _executeRemoveAdmin(address _admin) internal {
+    function _executeRemoveAdmin(address admin_) internal {
         // Remove from admins array
-        for (uint256 i = 0; i < admins.length; i++) {
-            if (admins[i] == _admin) {
-                admins[i] = admins[admins.length - 1];
-                admins.pop();
+        for (uint256 i = 0; i < _admins.length; i++) {
+            if (_admins[i] == admin_) {
+                _admins[i] = _admins[_admins.length - 1];
+                _admins.pop();
                 break;
             }
         }
 
-        _revokeRole(ADMIN_ROLE, _admin);
+        _revokeRole(ADMIN_ROLE, admin_);
         _updateQuorumThreshold();
-        emit AdminRemoved(_admin);
+        emit AdminRemoved(admin_);
     }
 
-    function _executeWithdrawFunds(address _to, uint256 _amount) internal validAddress(_to) validAmount(_amount) {
+    function _executeWithdrawFunds(address to_, uint256 amount_) internal validAddress(to_) validAmount(amount_) {
         uint256 balance = address(this).balance;
-        if (balance < _amount) revert InsufficientBalance();
+        if (balance < amount_) revert InsufficientBalance();
 
-        (bool success,) = payable(_to).call{value: _amount}("");
+        (bool success,) = payable(to_).call{value: amount_}("");
         if (!success) revert WithdrawalFailed();
-        emit FundsWithdrawn(_to, _amount);
+        emit FundsWithdrawn(to_, amount_);
     }
 
-    function _executeWithdrawTokens(address _to, uint256 _amount) internal validAddress(_to) validAmount(_amount) {
+    function _executeWithdrawTokens(address to_, uint256 amount_) internal validAddress(to_) validAmount(amount_) {
         if (paymentToken == address(0)) revert ERC20PaymentNotEnabled();
 
         IERC20 token = IERC20(paymentToken);
         uint256 balance = token.balanceOf(address(this));
 
-        if (balance < _amount) revert InsufficientBalance();
+        if (balance < amount_) revert InsufficientBalance();
 
-        token.safeTransfer(_to, _amount);
-        emit TokensWithdrawn(_to, _amount);
+        token.safeTransfer(to_, amount_);
+        emit TokensWithdrawn(to_, amount_);
     }
 
-    function _executeSetMintPrice(uint256 _newPrice) internal {
+    function _executeSetMintPrice(uint256 newPrice_) internal {
         uint256 oldPrice = mintPrice;
-        mintPrice = _newPrice;
-        emit MintPriceUpdated(oldPrice, _newPrice);
+        mintPrice = newPrice_;
+        emit MintPriceUpdated(oldPrice, newPrice_);
     }
 
-    function _executeSetTokenFee(uint256 _newFee) internal {
+    function _executeSetTokenFee(uint256 newFee_) internal {
         uint256 oldPrice = tokenMintPrice;
-        tokenMintPrice = _newFee;
-        emit TokenMintPriceUpdated(oldPrice, _newFee);
+        tokenMintPrice = newFee_;
+        emit TokenMintPriceUpdated(oldPrice, newFee_);
     }
 
-    function _executeSetPaymentToken(address _newToken) internal {
+    function _executeSetPaymentToken(address newToken_) internal {
         address oldToken = paymentToken;
-        paymentToken = _newToken;
-        emit PaymentTokenUpdated(oldToken, _newToken);
+        paymentToken = newToken_;
+        emit PaymentTokenUpdated(oldToken, newToken_);
     }
 
     // ============ Receive Function ============
