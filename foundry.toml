@@ -9,10 +9,6 @@ via_ir = true
 optimizer = true
 optimizer_runs = 200
 
-# Fork testing configuration
-[rpc_endpoints]
-bsc = "${BSC_RPC_URL}"
-
 # Fork test profile
 [profile.fork]
 ffi = false
