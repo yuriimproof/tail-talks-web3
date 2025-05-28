@@ -234,8 +234,9 @@ contract StarKeeperFactoryIntegrationTest is Test {
 
         // Test ETH withdrawal
         uint256 adminBalanceBefore = factoryAdmin1.balance;
+        uint256 collectionBalance = address(collection).balance;
         vm.prank(factoryAdmin1);
-        factory.createWithdrawFundsProposal(address(collection), factoryAdmin1, 0); // 0 means all
+        factory.createWithdrawFundsProposal(address(collection), factoryAdmin1, collectionBalance);
 
         assertEq(factoryAdmin1.balance, adminBalanceBefore + (2 * MINT_PRICE));
         assertEq(address(collection).balance, 0);
@@ -243,7 +244,7 @@ contract StarKeeperFactoryIntegrationTest is Test {
         // Test token withdrawal
         uint256 adminTokenBalanceBefore = mockToken.balanceOf(factoryAdmin1);
         vm.prank(factoryAdmin1);
-        factory.createWithdrawTokensProposal(address(collection), factoryAdmin1);
+        factory.createWithdrawTokensProposal(address(collection), factoryAdmin1, TOKEN_MINT_PRICE);
 
         assertEq(mockToken.balanceOf(factoryAdmin1), adminTokenBalanceBefore + TOKEN_MINT_PRICE);
         assertEq(mockToken.balanceOf(address(collection)), 0);
@@ -317,15 +318,13 @@ contract StarKeeperFactoryIntegrationTest is Test {
         assertEq(collection.totalSupply(), 1);
 
         // Test collection info
-        (
-            string memory name_,
-            string memory symbol_,
-            uint256 totalSupply_,
-            uint256 maxSupply_,
-            uint256 mintPrice_,
-            uint256 tokenMintPrice_,
-            address paymentToken_
-        ) = collection.getCollectionInfo();
+        string memory name_ = collection.name();
+        string memory symbol_ = collection.symbol();
+        uint256 totalSupply_ = collection.totalSupply();
+        uint256 maxSupply_ = collection.maxSupply();
+        uint256 mintPrice_ = collection.mintPrice();
+        uint256 tokenMintPrice_ = collection.tokenMintPrice();
+        address paymentToken_ = collection.paymentToken();
 
         assertEq(name_, "View Test");
         assertEq(symbol_, "VIEW");
@@ -640,7 +639,7 @@ contract StarKeeperFactoryIntegrationTest is Test {
 
         // Store collection address for later use
         StarKeeper[] memory collections = factory.getAllCollections();
-        address collectionAddress = address(collections[0]);
+        address payable collectionAddress = payable(address(collections[0]));
 
         // Add more admins
         vm.prank(factoryAdmin1);

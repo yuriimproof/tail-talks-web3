@@ -39,6 +39,34 @@ TailTalks Web3 is a comprehensive smart contract platform that enables pet owner
 └─────────────────┘    └──────────────────┘    └─────────────────┘
 ```
 
+## 📁 Project Structure
+
+```
+tail-talks-web3/
+├── src/                          # Smart contracts source code
+│   ├── StarOwner.sol            # Individual pet NFT contract
+│   ├── StarKeeper.sol           # Collection NFT contract  
+│   └── StarKeeperFactory.sol    # Factory for creating collections
+├── script/                      # Foundry deployment scripts (.s.sol)
+│   ├── DeployStarOwner.s.sol    # StarOwner deployment script
+│   └── DeployStarKeeperFactory.s.sol # Factory deployment script
+├── test/                        # Test files
+│   ├── unit/                    # Unit tests for individual contracts
+│   ├── integration/             # Integration tests
+│   ├── fork/                    # Fork tests (BSC mainnet)
+│   ├── invariant/               # Property-based invariant tests
+│   └── mocks/                   # Mock contracts for testing
+├── foundry.toml                 # Foundry configuration
+├── Makefile                     # Deployment automation
+└── README.md                    # Project documentation
+```
+
+### Folder Conventions
+
+- **`src/`**: Contains all Solidity smart contracts
+- **`script/`**: Foundry deployment scripts (`.s.sol` files) - follows Foundry convention
+- **`test/`**: All test files organized by type (unit, integration, fork, etc.)
+
 ## 🚀 Quick Start
 
 ### Prerequisites
@@ -78,6 +106,62 @@ forge test --gas-report
 
 # Generate coverage report
 forge coverage
+```
+
+### Fork Testing
+
+The project includes fork testing for BSC (Binance Smart Chain) to ensure contracts work correctly in the real BSC environment:
+
+```bash
+# Run all fork tests with BSC mainnet fork
+forge test --match-path "test/fork/*" --fork-url https://bsc-dataseed.binance.org/ -vv
+
+# Run specific fork test files
+forge test --match-path "test/fork/StarOwnerForkTest.t.sol" --fork-url https://bsc-dataseed.binance.org/ -vv
+forge test --match-path "test/fork/StarKeeperFactoryForkTest.t.sol" --fork-url https://bsc-dataseed.binance.org/ -vv
+
+# Run BSC-specific tests only
+forge test --match-test "*BSCFork*" --fork-url https://bsc-dataseed.binance.org/ -vv
+
+# Run with gas reporting
+forge test --match-path "test/fork/*" --fork-url https://bsc-dataseed.binance.org/ --gas-report
+
+# Run specific test patterns
+forge test --match-test "*Governance*" --fork-url https://bsc-dataseed.binance.org/ -vv    # Governance tests
+forge test --match-test "*Workflow*" --fork-url https://bsc-dataseed.binance.org/ -vv      # Workflow tests
+forge test --match-test "*Gas*" --fork-url https://bsc-dataseed.binance.org/ --gas-report  # Gas analysis tests
+
+# Alternative BSC RPC URLs you can use:
+# --fork-url https://bsc-dataseed1.defibit.io/
+# --fork-url https://bsc-dataseed1.ninicoin.io/
+# --fork-url https://bsc.nodereal.io
+```
+
+> **Note**: The fork tests include two types:
+> - `testBSCFork*` functions: Create their own forks (work with environment variables)
+> - `testFork*` and `testDeployOnFork` functions: Work with `--fork-url` flag (recommended)
+
+#### Fork Test Features
+
+- **Real BSC Environment**: Tests run against actual BSC mainnet state
+- **BNB Pricing**: Tests use BSC-appropriate pricing (0.01 BNB for StarOwner, 0.05 BNB for Factory)
+- **BUSD Integration**: Tests include BUSD token integration scenarios
+- **Gas Analysis**: Measure actual gas costs on BSC network
+- **Governance Testing**: Multi-admin governance scenarios on BSC
+- **High Volume Testing**: Stress testing with multiple NFT mints
+
+#### Environment Configuration
+
+Create a `.env` file with your BSC RPC URL:
+
+```bash
+# BSC RPC URL for fork testing
+BSC_RPC_URL=https://bsc-dataseed.binance.org/
+
+# Alternative BSC RPC URLs:
+# BSC_RPC_URL=https://bsc-dataseed1.defibit.io/
+# BSC_RPC_URL=https://bsc-dataseed1.ninicoin.io/
+# BSC_RPC_URL=https://bsc.nodereal.io
 ```
 
 ## 📦 Deployment

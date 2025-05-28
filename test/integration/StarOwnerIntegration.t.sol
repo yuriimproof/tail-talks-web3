@@ -277,7 +277,7 @@ contract StarOwnerIntegrationTest is Test {
         uint256 adminBalanceBefore = admin1.balance;
 
         vm.prank(admin1);
-        starOwner.createWithdrawFundsProposal(admin1, 0); // 0 = withdraw all
+        starOwner.createWithdrawFundsProposal(admin1, platformBalanceBefore);
 
         uint256 adminBalanceAfter = admin1.balance;
         assertEq(adminBalanceAfter, adminBalanceBefore + platformBalanceBefore);
@@ -288,7 +288,7 @@ contract StarOwnerIntegrationTest is Test {
         uint256 adminTokenBalanceBefore = paymentToken.balanceOf(admin1);
 
         vm.prank(admin1);
-        starOwner.createWithdrawTokensProposal(admin1);
+        starOwner.createWithdrawTokensProposal(admin1, tokenBalance);
 
         assertEq(paymentToken.balanceOf(admin1), adminTokenBalanceBefore + tokenBalance);
         assertEq(paymentToken.balanceOf(address(starOwner)), 0);
@@ -376,7 +376,7 @@ contract StarOwnerIntegrationTest is Test {
         assertEq(address(starOwner).balance, ethRevenue / 2);
 
         vm.prank(admin1);
-        starOwner.createWithdrawTokensProposal(admin1);
+        starOwner.createWithdrawTokensProposal(admin1, tokenRevenue);
 
         assertEq(paymentToken.balanceOf(admin1), tokenRevenue);
         assertEq(paymentToken.balanceOf(address(starOwner)), 0);
@@ -629,16 +629,14 @@ contract StarOwnerIntegrationTest is Test {
         // Test that state remains consistent across complex operations
 
         // Initial state
-        (
-            string memory name,
-            string memory symbol,
-            uint256 totalSupply,
-            uint256 mintPrice,
-            uint256 tokenMintPrice,
-            address paymentTokenAddr,
-            uint256 quorumThreshold,
-            uint256 totalProposals
-        ) = starOwner.getContractInfo();
+        string memory name = starOwner.name();
+        string memory symbol = starOwner.symbol();
+        uint256 totalSupply = starOwner.totalSupply();
+        uint256 mintPrice = starOwner.mintPrice();
+        uint256 tokenMintPrice = starOwner.tokenMintPrice();
+        address paymentTokenAddr = starOwner.paymentToken();
+        uint256 quorumThreshold = starOwner.quorumThreshold();
+        uint256 totalProposals = starOwner.getTotalProposals();
 
         assertEq(name, COLLECTION_NAME);
         assertEq(symbol, COLLECTION_SYMBOL);
@@ -662,8 +660,14 @@ contract StarOwnerIntegrationTest is Test {
         starOwner.voteForProposal(priceProposal);
 
         // Verify updated state
-        (name, symbol, totalSupply, mintPrice, tokenMintPrice, paymentTokenAddr, quorumThreshold, totalProposals) =
-            starOwner.getContractInfo();
+        name = starOwner.name();
+        symbol = starOwner.symbol();
+        totalSupply = starOwner.totalSupply();
+        mintPrice = starOwner.mintPrice();
+        tokenMintPrice = starOwner.tokenMintPrice();
+        paymentTokenAddr = starOwner.paymentToken();
+        quorumThreshold = starOwner.quorumThreshold();
+        totalProposals = starOwner.getTotalProposals();
 
         assertEq(name, COLLECTION_NAME); // Unchanged
         assertEq(symbol, COLLECTION_SYMBOL); // Unchanged

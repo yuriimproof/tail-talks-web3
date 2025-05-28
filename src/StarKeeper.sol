@@ -251,8 +251,9 @@ contract StarKeeper is ERC721Enumerable {
         if (paymentToken == address(0)) revert ERC20PaymentNotEnabled();
 
         IERC20 token = IERC20(paymentToken);
+        uint256 balance = token.balanceOf(address(this));
 
-        if (token.balanceOf(address(this)) < amount_) revert InsufficientBalance();
+        if (balance < amount_) revert InsufficientBalance();
 
         token.safeTransfer(to_, amount_);
         emit TokensWithdrawn(to_, amount_);

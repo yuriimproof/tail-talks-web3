@@ -102,6 +102,7 @@ contract StarOwner is ERC721, AccessControl {
     error AdminAlreadyExists();
     error AdminDoesNotExist();
     error LastAdminCannotBeRemoved();
+
     // ============ Modifiers ============
 
     modifier validAddress(address address_) {
@@ -242,13 +243,13 @@ contract StarOwner is ERC721, AccessControl {
     /**
      * @dev Create proposal to withdraw ERC20 tokens
      */
-    function createWithdrawTokensProposal(address to_)
+    function createWithdrawTokensProposal(address to_, uint256 amount_)
         external
         onlyRole(ADMIN_ROLE)
         validAddress(to_)
         returns (uint256)
     {
-        return _createProposal(ProposalType.WithdrawTokens, to_, 0);
+        return _createProposal(ProposalType.WithdrawTokens, to_, amount_);
     }
 
     /**

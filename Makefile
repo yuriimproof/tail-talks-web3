@@ -12,25 +12,6 @@ deploy-star-owner:
 deploy-star-keeper-factory:
 	@forge script script/DeployStarKeeperFactory.s.sol:DeployStarKeeperFactory $(NETWORK_ARGS)
 
-# BSC Testnet deployments
-deploy-star-owner-bsc-testnet:
-	@forge script script/DeployStarOwner.s.sol:DeployStarOwner \
-		--rpc-url $(BSC_TEST_RPC_URL) \
-		--private-key $(PRIVATE_KEY) \
-		--broadcast \
-		--verify \
-		--etherscan-api-key $(BSC_API_KEY) \
-		-vvvv
-
-deploy-star-keeper-factory-bsc-testnet:
-	@forge script script/DeployStarKeeperFactory.s.sol:DeployStarKeeperFactory \
-		--rpc-url $(BSC_TEST_RPC_URL) \
-		--private-key $(PRIVATE_KEY) \
-		--broadcast \
-		--verify \
-		--etherscan-api-key $(BSC_API_KEY) \
-		-vvvv
-
 # BSC Mainnet deployments
 deploy-star-owner-bsc-mainnet:
 	@forge script script/DeployStarOwner.s.sol:DeployStarOwner \
